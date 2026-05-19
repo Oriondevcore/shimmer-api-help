@@ -1,0 +1,22 @@
+name = "supatraxx-api"
+main = "worker.js"
+compatibility_date = "2024-05-19"
+
+account_id = "fdd89cf30de14e1ddcfa5fbbf27581c1"
+
+# D1 Database binding - Production
+[[d1_databases]]
+binding = "DB"
+database_name = "supatraxx_karaoke_db"
+database_id = "58be4e00-fcc2-4a05-843c-3f7870868210"
+
+# Development environment
+[env.development]
+[[env.development.d1_databases]]
+binding = "DB"
+database_name = "supatraxx_karaoke_db_dev"
+database_id = "dev-database-id"
+
+# Production routes
+[vars]
+API_URL = "https://supatraxx-api.oriondevcore.com"
