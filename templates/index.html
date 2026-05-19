@@ -1,15 +1,161 @@
 <!DOCTYPE html>
-<html lang='en'>
+<html lang="en">
 <head>
-  <meta charset='UTF-8'>
-  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-  <title>Flask App</title>
-  <link rel='stylesheet' href='/static/style.css'>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎤 Open KJ - Song Request</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#00bcd4">
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <main>
-    <h1>Hello, Flask!</h1>
-    <p>Edit <code>app.py</code> to get started.</p>
+    <h1>🎤 Open KJ</h1>
+    <p style="text-align:center;opacity:0.8">Karaoke Song Request</p>
+    
+    <div id="app">
+      <section class="card">
+        <h2>🎵 Request a Song</h2>
+        
+        <label for="song-search">Search Songs:</label>
+        <input type="text" id="song-search" placeholder="Type song or artist name..." onkeyup="searchSongs()">
+        
+        <div id="search-results"></div>
+        
+        <div id="selected-song" style="display:none;margin-top:15px;padding:15px;background:rgba(0,188,212,0.2);border-radius:8px;">
+          <strong>Selected:</strong> <span id="song-title"></span>
+          <button onclick="cancelSelection()" style="float:right;background:#666">✕</button>
+        </div>
+        
+        <div id="key-change-section" style="display:none;margin-top:15px">
+          <label>Key Change:</label>
+          <div style="display:flex;gap:5px;margin:5px 0">
+            <button onclick="setKey(-3)" class="key-btn">-3</button>
+            <button onclick="setKey(-2)" class="key-btn">-2</button>
+            <button onclick="setKey(-1)" class="key-btn">-1</button>
+            <button onclick="setKey(0)" class="key-btn active">0</button>
+            <button onclick="setKey(1)" class="key-btn">+1</button>
+            <button onclick="setKey(2)" class="key-btn">+2</button>
+            <button onclick="setKey(3)" class="key-btn">+3</button>
+          </div>
+        </div>
+        
+        <input type="text" id="singer-name" placeholder="Your Name" style="margin-top:10px">
+        
+        <button onclick="submitRequest()" id="request-btn" class="primary" style="width:100%;margin-top:15px;display:none">
+          🎵 REQUEST SONG
+        </button>
+        
+        <button onclick="toggleFavourite()" id="favourite-btn" style="width:100%;margin-top:10px;background:#ffd700;color:#333">
+          ⭐ Save to Favourites
+        </button>
+      </section>
+      
+      <section class="card">
+        <h2>📋 Queue</h2>
+        <div id="queue"></div>
+      </section>
+    </div>
   </main>
+  
+  <script>
+    const API_BASE = '';
+    let selectedSong = null;
+    let keyChange = 0;
+    
+    async function searchSongs() {
+      const query = document.getElementById('song-search').value;
+      if (query.length < 2) { document.getElementById('search-results').innerHTML = ''; return; }
+      try {
+        const res = await fetch(API_BASE + '/api/songs/search?q=' + encodeURIComponent(query));
+        const data = await res.json();
+        const html = data.songs.map(song => 
+          '<div class="song-item" onclick="selectSong(' + song.id + ',\'' + song.title.replace(/'/g, "\\'") + '\',\'' + song.artist.replace(/'/g, "\\'") + '\')">' +
+          '<strong>' + song.title + '</strong> <span>by ' + song.artist + '</span></div>'
+        ).join('') || '<p>No songs found</p>';
+        document.getElementById('search-results').innerHTML = html;
+      } catch (e) { document.getElementById('search-results').innerHTML = '<p>Search error: ' + e.message + '</p>'; }
+    }
+    
+    function selectSong(id, title, artist) {
+      selectedSong = { id, title, artist };
+      document.getElementById('song-title').textContent = title + ' - ' + artist;
+      document.getElementById('selected-song').style.display = 'block';
+      document.getElementById('key-change-section').style.display = 'block';
+      document.getElementById('request-btn').style.display = 'block';
+      document.getElementById('search-results').innerHTML = '';
+      document.getElementById('song-search').value = '';
+    }
+    
+    function setKey(val) {
+      keyChange = val;
+      document.querySelectorAll('.key-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+    }
+    
+    function cancelSelection() {
+      selectedSong = null; keyChange = 0;
+      document.getElementById('selected-song').style.display = 'none';
+      document.getElementById('request-btn').style.display = 'none';
+      document.getElementById('key-change-section').style.display = 'none';
+    }
+    
+    async function submitRequest() {
+      if (!selectedSong) return;
+      const singer = document.getElementById('singer-name').value || 'Anonymous';
+      try {
+        const res = await fetch(API_BASE + '/api/songs/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            song_id: selectedSong.id,
+            title: selectedSong.title,
+            artist: selectedSong.artist,
+            singer: singer,
+            key_change: keyChange
+          })
+        });
+        if (res.ok) {
+          cancelSelection();
+          document.getElementById('singer-name').value = '';
+          loadQueue();
+          alert('Song requested! 🎤');
+        } else {
+          alert('Error: ' + (await res.text()));
+        }
+      } catch (e) { alert('Error: ' + e.message); }
+    }
+    
+    async function loadQueue() {
+      try {
+        const res = await fetch(API_BASE + '/api/songs/queue');
+        const data = await res.json();
+        const html = data.queue.map((item, i) => 
+          '<div class="queue-item">' +
+          '<span class="queue-num">' + (i+1) + '</span>' +
+          '<div><strong>' + item.title + '</strong> <span>by ' + item.artist + '</span></div>' +
+          '<div class="meta">' + item.singer + ' • Key: ' + (item.key_change || 0) + '</div>' +
+          '</div>'
+        ).join('') || '<p>No songs in queue</p>';
+        document.getElementById('queue').innerHTML = html;
+      } catch (e) { document.getElementById('queue').innerHTML = '<p>Error loading queue: ' + e.message + '</p>'; }
+    }
+    
+    function toggleFavourite() {
+      if (!selectedSong) { alert('Please select a song first!'); return; }
+      fetch(API_BASE + '/api/songs/favourite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          song_id: selectedSong.id,
+          title: selectedSong.title,
+          artist: selectedSong.artist
+        })
+      }).then(() => alert('Saved to favourites! ⭐'));
+    }
+    
+    loadQueue();
+    setInterval(loadQueue, 30000);
+  </script>
 </body>
 </html>
